@@ -19,5 +19,7 @@ Suggests:
     knitr,
     rmarkdown
 VignetteBuilder: knitr
+URL: https://github.com/Mathatistics/equationer, https://mathatistics.github.io/equationer/
+BugReports: https://github.com/Mathatistics/equationer/issues
 Config/testthat/edition: 3
 Config/roxygen2/version: 8.1.1

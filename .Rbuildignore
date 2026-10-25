@@ -6,3 +6,6 @@
 ^\.Rproj\.user$
 ^dev$
 ^\.github$
+^_pkgdown\.yml$
+^docs$
+^pkgdown$
