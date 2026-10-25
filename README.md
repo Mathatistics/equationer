@@ -23,7 +23,7 @@ You can install the development version of `equationer` directly from GitHub:
 
 ```r
 # install.packages("remotes")
-remotes::install_github("rajurimal/equationer")
+remotes::install_github("Mathatistics/equationer")
 ```
 
 ---
