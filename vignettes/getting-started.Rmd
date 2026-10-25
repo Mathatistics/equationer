@@ -1,0 +1,170 @@
+---
+title: "Getting Started with equationer"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Getting Started with equationer}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+The `equationer` package provides an extensible, R6-registry based framework for extracting clean, plain-text regression formulas, group-level random effect equations, and subgroup factor projections from linear, generalized linear, and mixed-effects models.
+
+```{r setup}
+library(equationer)
+```
+
+## 1. Basic Usage with Standard Linear Models (`lm`)
+
+Extracting plain-text formulas from standard `lm` objects is simple.
+
+```{r lm-example}
+# Fit a multiple linear regression model
+fit_lm <- lm(mpg ~ wt + hp, data = mtcars)
+
+# Extract global equation
+eq_lm <- extract_mixed_equation(fit_lm, digits = 3)
+print(eq_lm)
+```
+
+You can convert the resulting `equation_collection` into a standard `data.frame` for downstream processing, report exports, or table output:
+
+```{r lm-dataframe}
+as.data.frame(eq_lm)
+```
+
+---
+
+## 2. Subgroup Equation Extraction (`by_factor`)
+
+When models contain categorical factors or factor interactions, `equationer` can project subgroup-specific regression equations across the unique levels of factor variables using its vectorized model-matrix projection engine.
+
+```{r subgroup-example}
+# Prepare data with categorical factor
+model_data <- transform(mtcars, cyl = factor(cyl))
+
+# Fit a model with continuous and factor terms
+fit_factor <- lm(mpg ~ wt + cyl, data = model_data)
+
+# Extract subgroup equations stratified by the factor 'cyl'
+eq_subgroups <- extract_mixed_equation(fit_factor, by_factor = "cyl", digits = 2)
+print(eq_subgroups)
+```
+
+---
+
+## 3a. Mixed-Effects Models (`lme4`) & Group-Level Random Equations
+
+`equationer` seamlessly processes linear mixed-effects models fitted with `lme4::lmer`. You can extract both the population-level (fixed-effects) equation or individual subject/group-specific equations that incorporate estimated random intercepts and slopes.
+
+### Population-Level (Fixed Effects) Equation
+
+```{r lmer-global}
+library(lme4)
+
+# Fit a linear mixed-effects model on sleepstudy dataset
+fit_lmer <- lmer(Reaction ~ Days + (Days | Subject), data = sleepstudy)
+
+# Extract overall population fixed-effects equation
+eq_lmer_fixed <- extract_mixed_equation(fit_lmer, digits = 2)
+print(eq_lmer_fixed)
+```
+
+### Subject/Group-Level Random Effect Equations
+
+When analyzing hierarchical data, you often need individual equations for each group or subject that combine fixed effects with conditional modes (random effects):
+
+```{r lmer-subject-level}
+# Extract subject-specific equations for all subjects in the random effect grouping
+eq_lmer_subjects <- extract_mixed_equation(fit_lmer, digits = 2, by_subject = TRUE)
+print(eq_lmer_subjects)
+```
+
+## 3b. Generalized Linear Mixed-Effects Models with `glmmTMB`
+
+`equationer` natively supports model objects fitted with `glmmTMB`.
+
+```{r glmmtmb-example, message=FALSE, warning=FALSE}
+library(glmmTMB)
+
+# Fit a mixed-effects model using glmmTMB
+fit_tmb <- glmmTMB(Reaction ~ Days + (Days | Subject), data = sleepstudy)
+
+# 1. Extract population-level global fixed-effects equation
+eq_tmb_global <- extract_mixed_equation(fit_tmb, digits = 2)
+print(eq_tmb_global)
+
+# 2. Extract subject-specific equations incorporating random effects
+eq_tmb_subjects <- extract_mixed_equation(fit_tmb, digits = 2, by_subject = TRUE)
+
+# View first 5 subject-specific equations
+head(as.data.frame(eq_tmb_subjects), 5)
+```
+
+---
+
+## 4. Extending `equationer`: Writing Custom Adapters (`mgcv::gam`)
+
+`equationer` uses an internal R6 class registry. If you work with a model framework that is not supported out of the box, you can define a custom `ModelAdapter` subclass and register it via `register_model_adapter()`.
+
+Below is a complete, production-ready example demonstrating how to build an adapter for Generalized Additive Models fitted with `mgcv::gam`.
+
+### Step 1: Define the R6 Adapter Class
+
+```r
+library(mgcv)
+
+#' Custom Model Adapter for mgcv::gam Objects
+AdapterGAM <- R6::R6Class("AdapterGAM",
+  inherit = ModelAdapter,
+  public = list(
+    get_response_name = function() {
+      # Extract response term name from model formula
+      as.character(stats::formula(self$model))[2]
+    },
+    
+    get_fixed_effects = function() {
+      # Extract parametric fixed-effect coefficients
+      coef(self$model)
+    },
+    
+    get_data = function() {
+      # Extract model frame used during fitting
+      self$model$model
+    },
+    
+    get_error_label = function() {
+      # Define appropriate error suffix representation
+      " + \u03B5"
+    }
+  )
+)
+```
+
+### Step 2: Register the Adapter Class
+
+Register your custom class generator with the package registry:
+
+```r
+# Register AdapterGAM for model objects of class "gam"
+register_model_adapter("gam", AdapterGAM)
+```
+
+### Step 3: Extract Equations from a `gam` Model
+
+Once registered, any fitted `gam` model can be passed directly to `extract_mixed_equation()`:
+
+```r
+# Fit a GAM with parametric terms
+fit_gam <- gam(mpg ~ wt + hp + gear, data = mtcars)
+
+# Extract equation using the registered custom adapter
+eq_gam <- extract_mixed_equation(fit_gam, digits = 2)
+print(eq_gam)
+```

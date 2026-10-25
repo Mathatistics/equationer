@@ -1,0 +1,23 @@
+Package: equationer
+Title: Extract Plain-Text Regression Equations from Linear and Mixed Models
+Version: 0.1.0
+Authors@R: 
+    person("Raju", "Rimal", , "rajur@nih.no", role = c("aut", "cre"))
+Description: An extensible R6-registry based framework to extract clean, 
+    plain-text regression formulas and subgroup projections from 'lm', 'lme4', 
+    and 'glmmTMB' model frameworks.
+License: MIT + file LICENSE
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+Imports: 
+    R6,
+    stats
+Suggests: 
+    lme4,
+    glmmTMB,
+    testthat (>= 3.0.0),
+    knitr,
+    rmarkdown
+VignetteBuilder: knitr
+Config/testthat/edition: 3
+Config/roxygen2/version: 8.1.1
