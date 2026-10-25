@@ -1,8 +1,6 @@
-# equationer <a href="https://github.com/rajurimal/equationer"><img src="https://raw.githubusercontent.com/rajurimal/equationer/main/man/figures/logo.png" align="right" height="138" alt="equationer website" /></a>
+# equationer <a href="https://github.com/Mathatistics/equationer"><img src="https://raw.githubusercontent.com/Mathatistics/equationer/main/man/figures/logo.png" align="right" height="138" alt="equationer website" /></a>
 
-<!-- badges: start -->
-  [![R-CMD-check](https://github.com/Mathatistics/equationer/actions/workflows/R-CMD-check.yaml/badge.svghttps://github.com/Mathatistics/equationer/actions/workflows/R-CMD-check.yaml/badge.svghttps://github.com/Mathatistics/equationer/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/Mathatistics/equationer/actions/workflows/R-CMD-check.yaml)
-  <!-- badges: end -->
+[![R-CMD-check](https://github.com/Mathatistics/equationer/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/Mathatistics/equationer/actions/workflows/R-CMD-check.yaml)
 
 The **equationer** R package provides an extensible, R6-registry based framework to extract clean, formatted, plain-text regression formulas, subgroup projections, and subject-level random-effects equations from fitted model objects. 
 
