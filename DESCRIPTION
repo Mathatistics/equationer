@@ -11,6 +11,7 @@ Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
 Imports: 
     R6,
+    reformulas,
     stats
 Suggests: 
     lme4,

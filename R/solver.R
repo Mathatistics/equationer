@@ -1,70 +1,77 @@
-.solve_equations_via_matrix <- function(adapter, by_factor, digits) {
-  data    <- adapter$get_data()
-  fix_cf  <- adapter$get_fixed_effects()
+#' @noRd
+.solve_equations_via_matrix <- function(adapter, by_factor = NULL, digits = 2) {
+  fit <- adapter$model
+  dat <- adapter$get_data()
+  fix_cf <- adapter$get_fixed_effects()
   dep_var <- adapter$get_response_name()
+  err_lbl <- adapter$get_error_label()
   
-  # Ensure target factor fields are properly cast in reference data
-  for (f in by_factor) data[[f]] <- as.factor(data[[f]])
+  full_form <- stats::formula(fit)
   
-  # 1. Create a compact grid of unique factor combinations
-  lev_list <- lapply(by_factor, function(f) levels(data[[f]]))
-  names(lev_list) <- by_factor
-  combo_grid <- expand.grid(lev_list, KEEP.OUT.ATTRS = FALSE, stringsAsFactors = FALSE)
-  
-  # Identify numeric continuous variables separate from the factors
-  all_terms <- attr(stats::terms(stats::formula(adapter$model)), "term.labels")
-  continuous_vars <- setdiff(all_terms, by_factor)
-  continuous_vars <- continuous_vars[!grepl(paste(by_factor, collapse = "|"), continuous_vars)]
-  
-  equations <- character(nrow(combo_grid))
-  combo_names <- apply(combo_grid, 1, function(row) paste(paste0(names(row), "=", row), collapse = " & "))
-  names(equations) <- combo_names
-  
-  # Predictor-only formula (dropping the response variable)
-  pred_formula <- stats::delete.response(stats::terms(stats::formula(adapter$model)))
-  
-  # 2. Vectorized Math Engine: Calculate unique group intercepts and slopes via Model Matrix projections
-  for (i in 1:nrow(combo_grid)) {
-    # Generate baseline dummy test rows for this target factor level group combination
-    mock_row <- combo_grid[i, , drop = FALSE]
-    
-    # Ensure factor columns in mock_row retain the original full levels from `data` 
-    # so stats::model.matrix recognizes the complete contrast factor setup without throwing a 1-level error
-    for (f in by_factor) {
-      mock_row[[f]] <- factor(mock_row[[f]], levels = levels(data[[f]]))
-    }
-    
-    # Target Intercept Shift extraction
-    for (cv in continuous_vars) mock_row[[cv]] <- 0
-    
-    # Clean model matrix mapping generation using predictor-only formula
-    mat_int <- stats::model.matrix(pred_formula, data = mock_row)
-    group_intercept <- sum(mat_int[1, ] * fix_cf, na.rm = TRUE)
-    
-    # Target Slope evaluation updates
-    slopes <- numeric(length(continuous_vars))
-    names(slopes) <- continuous_vars
-    
-    for (cv in continuous_vars) {
-      mock_slope <- mock_row
-      mock_slope[[cv]] <- 1
-      mat_slope <- stats::model.matrix(pred_formula, data = mock_slope)
-      # Subtract the baseline intercept projection to extract the pure calculated derivative slope
-      slopes[cv] <- sum((mat_slope[1, ] - mat_int[1, ]) * fix_cf, na.rm = TRUE)
-    }
-    
-    # 3. Assemble plain text string output
-    eq_str <- paste(dep_var, "=", round(group_intercept, digits))
-    for (s_name in names(slopes)) {
-      val <- slopes[s_name]
-      if (is.na(val) || val == 0) next
-      sign_str <- if (val >= 0) " + " else " - "
-      eq_str <- paste0(eq_str, sign_str, round(abs(val), digits), "*", s_name)
-    }
-    
-    equations[i] <- paste0(eq_str, adapter$get_error_label())
+  # Strip random effects bars using reformulas::nobars
+  if (requireNamespace("reformulas", quietly = TRUE)) {
+    fixed_form <- reformulas::nobars(full_form)
+  } else {
+    fixed_form <- full_form
   }
   
-  return(equations)
+  tms <- stats::terms(fixed_form, data = dat)
+  m_terms <- stats::delete.response(tms)
+  
+  if (is.null(by_factor)) {
+    # Global equation logic
+    mm <- stats::model.matrix(m_terms, data = dat[1, , drop = FALSE])
+    # Build global eq string...
+    # (Ensure eqs is a named character vector)
+  } else {
+    if (!by_factor %in% names(dat)) {
+      stop("The specified `by_factor` variable '", by_factor, "' is not present in the model data.")
+    }
+    
+    levels_fac <- levels(factor(dat[[by_factor]]))
+    eqs <- character(length(levels_fac))
+    names(eqs) <- paste0(by_factor, "=", levels_fac)
+    
+    for (lvl in levels_fac) {
+      sub_dat <- dat[dat[[by_factor]] == lvl, , drop = FALSE]
+      if (nrow(sub_dat) == 0) next
+      
+      row_idx <- 1
+      mm <- stats::model.matrix(m_terms, data = sub_dat[row_idx, , drop = FALSE])
+      
+      # Evaluate active coefficients for this subgroup level
+      active_cols <- colnames(mm)
+      sub_intercept <- 0
+      sub_slopes <- numeric(0)
+      
+      for (col in active_cols) {
+        if (col == "(Intercept)") {
+          sub_intercept <- if ("(Intercept)" %in% names(fix_cf)) fix_cf["(Intercept)"] else 0
+        } else if (col %in% names(fix_cf)) {
+          sub_slopes[col] <- fix_cf[col]
+        } else {
+          # Check for factor contrast matches
+          matched_coef <- grep(paste0("^", col), names(fix_cf), value = TRUE)
+          if (length(matched_coef) > 0) {
+            sub_slopes[col] <- fix_cf[matched_coef[1]]
+          } else {
+            sub_slopes[col] <- 0
+          }
+        }
+      }
+      
+      eq_str <- paste(dep_var, "=", round(sub_intercept, digits))
+      for (s_name in names(sub_slopes)) {
+        val <- sub_slopes[s_name]
+        if (is.na(val) || val == 0) next
+        sign_str <- if (val >= 0) " + " else " - "
+        eq_str <- paste0(eq_str, sign_str, round(abs(val), digits), "*", s_name)
+      }
+      
+      eqs[paste0(by_factor, "=", lvl)] <- paste0(eq_str, err_lbl)
+    }
+  }
+  
+  return(eqs) # Return character vector directly
 }
 
